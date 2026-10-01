@@ -1,0 +1,44 @@
+// Vercel serverless function: sends one drawing sheet to Claude and returns the openings found.
+const SYSTEM = `You are a quantity surveyor's assistant reading architectural drawings (plans, elevations, window schedules) to build a door and window order list.
+Return ONLY JSON, no prose, in this shape:
+{"openings":[{"mark":string|null,"description":string,"type":"Fixed window"|"Openable window"|"Sliding door"|"Single hinged door"|"Double hinged door","width_mm":number|null,"height_mm":number|null,"qty":number,"view":string,"note":string|null}]}
+Rules:
+- Include every door and window visible on the sheet. If a schedule table exists, use its marks and sizes (schedule columns are usually HEIGHT then WIDTH; trust the column headers).
+- Without a schedule, read sizes from dimension strings: the horizontal string above or below an opening is its width, the vertical string beside it is its height. If several identical openings are side by side, give one row with qty.
+- Never invent a size. If a dimension is not shown, use null and say why in note.
+- type: sliding = panels on a track (arrows or overlapping panels); single hinged = one leaf with a swing line; double hinged = two leaves; fixed = no swing or opening lines; otherwise openable window. If unsure, pick the most likely type and say so in note.
+- view: short name of the sheet or elevation, e.g. "Front elevation", "Ground floor plan".
+- If red revision clouds mark openings to replace, mention "outlined for replacement" in note for those, and "not outlined" for others.
+- Skip title-block text, grid bubbles and level markers.`;
+
+module.exports = async (req, res) => {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const pw = process.env.APP_PASSWORD;
+  if (pw && req.headers['x-app-password'] !== pw) return res.status(401).json({ error: 'Wrong password' });
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not set in Vercel' });
+  const { image, text } = req.body || {};
+  if (!image) return res.status(400).json({ error: 'No image sent' });
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: process.env.MODEL || 'claude-sonnet-5-5',
+        max_tokens: 4000,
+        system: SYSTEM,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } },
+          { type: 'text', text: 'Text extracted from this sheet (may be incomplete):\n' + (text || '') + '\n\nList the openings as JSON.' }
+        ] }]
+      })
+    });
+    const j = await r.json();
+    if (!r.ok) return res.status(502).json({ error: (j.error && j.error.message) || 'Anthropic API error' });
+    const out = (j.content || []).map(c => c.text || '').join('').replace(/```json|```/g, '').trim();
+    const start = out.indexOf('{'), end = out.lastIndexOf('}');
+    return res.status(200).json(JSON.parse(out.slice(start, end + 1)));
+  } catch (e) {
+    return res.status(500).json({ error: 'Could not read the sheet: ' + e.message });
+  }
+};

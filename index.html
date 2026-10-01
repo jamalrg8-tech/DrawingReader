@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Opening BOQ</title>
+<meta name="theme-color" content="#1f3a34">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f3f5f2;--card:#fff;--ink:#17231f;--mut:#61706a;--line:#d5dcd8;--acc:#1f3a34;--hi:#c8641e}
+@media (prefers-color-scheme:dark){:root{--bg:#121a17;--card:#1b2622;--ink:#e8eeea;--mut:#9aa9a2;--line:#2f3d38;--acc:#7fc4ae;--hi:#f0985a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 "Arial Narrow",system-ui,sans-serif}
+header{padding:16px 16px 8px}
+h1{margin:0;font-size:26px;font-weight:600}
+p.s{margin:4px 0 0;color:var(--mut)}
+main{padding:8px 16px 40px;max-width:900px;margin:auto}
+.drops{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.drop{display:block;border:2px dashed var(--acc);border-radius:10px;padding:14px;text-align:center;background:var(--card);cursor:pointer;font-size:14px;color:var(--mut)}
+.drop b{color:var(--acc);font-size:16px}
+input[type=file]{display:none}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+button{font:inherit;padding:9px 14px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:#fff;cursor:pointer}
+@media (prefers-color-scheme:dark){button{color:#0d1512}}
+button.g{background:transparent;color:var(--acc)}
+#log{color:var(--mut);font-size:14px;margin:8px 0;min-height:20px}
+.wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:700px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-weight:600;color:var(--mut);font-size:14px}
+td input,td select{font:inherit;background:transparent;color:inherit;border:1px solid transparent;border-radius:6px;padding:4px;width:100%}
+td input:focus,td select:focus{border-color:var(--acc);outline:none}
+td input.n{width:64px}
+tfoot td{font-weight:600}
+h2{font-size:18px;margin:18px 0 6px}
+</style></head>
+<body>
+<header><h1>Opening BOQ</h1><p class="s">Build a door and window order list from drawing PDFs.</p></header>
+<main>
+<div class="drops">
+<label class="drop"><input id="f1" type="file" accept="application/pdf" multiple><b>Read schedule</b><br>Instant, offline. For sheets with a schedule table.</label>
+<label class="drop"><input id="f2" type="file" accept="application/pdf" multiple><b>Read with AI</b><br>Any drawing, including elevations with dimensions only.</label>
+</div>
+<div id="log"></div>
+<div class="row"><button id="add" class="g">Add row</button><button id="csv">Export CSV</button><button id="clr" class="g">Clear</button></div>
+<div class="wrap"><table><thead><tr><th>Mark</th><th>Description</th><th>Type</th><th>H (mm)</th><th>W (mm)</th><th>Qty</th><th>Source</th><th></th></tr></thead><tbody id="tb"></tbody><tfoot><tr><td colspan="5">Total openings</td><td id="tot">0</td><td colspan="2"></td></tr></tfoot></table></div>
+<h2>Summary by type</h2><div class="wrap"><table style="min-width:0"><tbody id="sum"></tbody></table></div>
+<p class="s">AI results are a first pass. Check every size against the drawing, and remember one opening can appear on both a plan and an elevation, so the same window may be listed twice.</p>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const TYPES=["Fixed window","Openable window","Sliding door","Single hinged door","Double hinged door"];
+const $=id=>document.getElementById(id);
+let rows=[];try{rows=JSON.parse(localStorage.getItem("boq")||"[]")}catch(e){}
+const save=()=>{try{localStorage.setItem("boq",JSON.stringify(rows))}catch(e){}};
+const log=(m,c)=>{$("log").textContent=m;$("log").style.color=c||""};
+
+function classify(mark,name){
+  const s=(name||"").toLowerCase();
+  if(/slid/.test(s))return "Sliding door";
+  if(/double|mullionless/.test(s))return "Double hinged door";
+  if(/tilt|turn|sash|casement|open/.test(s))return /^d/i.test(mark)?"Single hinged door":"Openable window";
+  if(/fixed|frames/.test(s))return "Fixed window";
+  return /^d/i.test(mark)?"Single hinged door":"Fixed window";
+}
+async function pageLines(page){
+  const c=await page.getTextContent(),m={};
+  c.items.forEach(i=>{const y=Math.round(i.transform[5]/3);(m[y]=m[y]||[]).push(i)});
+  return{lines:Object.keys(m).sort((a,b)=>b-a).map(y=>m[y].sort((a,b)=>a.transform[4]-b.transform[4]).map(i=>i.str).join(" ").replace(/\s+/g," ").trim()),
+    flat:c.items.map(i=>i.str).join(" ").replace(/\s+/g," ")};
+}
+const openPdf=async f=>pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;
+
+/* ---- Mode 1: schedule table, runs in the browser ---- */
+async function readSchedule(file){
+  const pdf=await openPdf(file),sched={},tags={},all={};let elev=0;
+  for(let p=1;p<=pdf.numPages;p++){
+    const {lines,flat}=await pageLines(await pdf.getPage(p));
+    lines.forEach(l=>{const m=l.match(/^([WD]-\d+(?:\.\d+)?)\s+(.+?)\s+(\d{3,4})\s+(\d{3,4})$/i);if(m&&!sched[m[1]])sched[m[1]]={mark:m[1],name:m[2],h:+m[3],w:+m[4]}});
+    const isE=/ELEVATIONS?/i.test(flat)&&/REPLACE SHEET/i.test(flat),re=/H\s*=\s*\d+\s*W\s*=?\s*\d+\s*([WD]-\d+(?:\.\d+)?)/gi;let t;
+    while((t=re.exec(flat))){const k=t[1].toUpperCase();all[k]=(all[k]||0)+1;if(isE)tags[k]=(tags[k]||0)+1}
+    if(isE)elev++;
+  }
+  return{sched,tags:elev?tags:all,elev};
+}
+$("f1").onchange=async e=>{
+  const msg=[];log("Reading…");
+  for(const file of e.target.files){
+    try{
+      const r=await readSchedule(file),n=Object.keys(r.sched).length;
+      if(!n){msg.push(file.name+": no schedule table found. Try Read with AI.");continue}
+      Object.values(r.sched).forEach(s=>{if(rows.some(x=>x.mark===s.mark&&x.src===file.name.slice(0,14)))return;
+        rows.push({mark:s.mark,name:s.name,type:classify(s.mark,s.name),h:s.h,w:s.w,qty:r.tags[s.mark.toUpperCase()]||0,src:file.name.slice(0,14)})});
+      msg.push(file.name+": "+n+" marks read.");
+    }catch(err){msg.push(file.name+": "+err.message)}
+  }
+  save();draw();log(msg.join(" "));e.target.value="";
+};
+
+/* ---- Mode 2: AI reads each sheet through /api/extract ---- */
+async function render(page,maxPx=1568,q=.8){
+  const v0=page.getViewport({scale:1}),sc=Math.min(2.5,maxPx/Math.max(v0.width,v0.height)),v=page.getViewport({scale:sc});
+  const c=document.createElement("canvas");c.width=Math.round(v.width);c.height=Math.round(v.height);
+  const ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);
+  await page.render({canvasContext:ctx,viewport:v}).promise;
+  let d=c.toDataURL("image/jpeg",q).split(",")[1];
+  // Vercel rejects request bodies over 4.5 MB; shrink busy sheets until they fit.
+  if(d.length>3200000&&maxPx>900)return render(page,Math.round(maxPx*.8),.7);
+  return d;
+}
+async function callApi(body){
+  for(let tries=0;tries<3;tries++){
+    let r;
+    try{r=await fetch("/api/extract",{method:"POST",headers:{"content-type":"application/json","x-app-password":localStorage.getItem("pw")||""},body:JSON.stringify(body)})}
+    catch(e){throw new Error("Could not reach /api/extract. Make sure the test server is running (Start app.command) or use your Vercel address.")}
+    if(r.status===401){localStorage.removeItem("pw");const p=prompt("Password for this app:");if(!p)throw new Error("Password required");localStorage.setItem("pw",p);continue}
+    const raw=await r.text();let j=null;try{j=JSON.parse(raw)}catch(e){}
+    if(r.ok&&j)return j;
+    if(j&&j.error)throw new Error(j.error);
+    const hint={404:"the api folder was not deployed (check api/extract.js is in the repo)",405:"the site host is not running the api function (deploy on Vercel)",413:"page image too large",504:"timed out on Vercel (sheet took too long to read)"}[r.status];
+    throw new Error("Error "+r.status+(hint?": "+hint:"")+(raw&&!hint?": "+raw.slice(0,120):""));
+  }
+  throw new Error("Wrong password");
+}
+$("f2").onchange=async e=>{
+  let added=0;const errs=[];
+  if(location.protocol==="file:"){log("Read with AI cannot run from a double-clicked index.html. Double-click Start app.command in the app folder instead (it opens localhost:3000), or use your Vercel address.","var(--hi)");e.target.value="";return}
+  for(const file of e.target.files){
+    try{
+      const pdf=await openPdf(file),n=Math.min(pdf.numPages,20);
+      for(let p=1;p<=n;p++){
+        log(`${file.name}: reading page ${p} of ${n}…`);
+        const page=await pdf.getPage(p),{flat}=await pageLines(page);
+        try{
+          const j=await callApi({image:await render(page),text:flat.slice(0,5000)});
+          (j.openings||[]).forEach(o=>{
+            rows.push({mark:o.mark||"",name:(o.description||"")+(o.note?" ("+o.note+")":""),type:TYPES.includes(o.type)?o.type:"Openable window",
+              h:+o.height_mm||0,w:+o.width_mm||0,qty:+o.qty||1,src:(o.view||"p"+p).slice(0,22)});added++});
+          save();draw();
+        }catch(err){errs.push("p"+p+": "+err.message)}
+      }
+    }catch(err){errs.push(file.name+": "+err.message)}
+  }
+  log(added+" openings added."+(errs.length?" Problems: "+errs.join("; "):" Check them against the drawing."),errs.length?"var(--hi)":"");
+  e.target.value="";
+};
+
+function draw(){
+  const q=s=>String(s||"").replace(/"/g,"&quot;");
+  $("tb").innerHTML=rows.map((r,i)=>`<tr><td><input value="${q(r.mark)}" data-i="${i}" data-k="mark" style="width:70px"></td><td><input value="${q(r.name)}" data-i="${i}" data-k="name" style="min-width:170px"></td><td><select data-i="${i}" data-k="type">${TYPES.map(t=>`<option${t===r.type?" selected":""}>${t}</option>`).join("")}</select></td><td><input class="n" type="number" value="${r.h}" data-i="${i}" data-k="h"></td><td><input class="n" type="number" value="${r.w}" data-i="${i}" data-k="w"></td><td><input class="n" type="number" value="${r.qty}" data-i="${i}" data-k="qty"></td><td>${q(r.src)}</td><td><button class="g" data-del="${i}">✕</button></td></tr>`).join("")||`<tr><td colspan="8">No rows yet. Choose a PDF or add a row.</td></tr>`;
+  $("tot").textContent=rows.reduce((a,r)=>a+(+r.qty||0),0);
+  const s={};rows.forEach(r=>s[r.type]=(s[r.type]||0)+(+r.qty||0));
+  $("sum").innerHTML=TYPES.map(t=>`<tr><td>${t}</td><td>${s[t]||0}</td></tr>`).join("");
+}
+$("tb").addEventListener("change",e=>{const i=e.target.dataset.i;if(i==null)return;const k=e.target.dataset.k;rows[i][k]=["h","w","qty"].includes(k)?+e.target.value:e.target.value;save();draw()});
+$("tb").addEventListener("click",e=>{const d=e.target.dataset.del;if(d!=null){rows.splice(d,1);save();draw()}});
+$("add").onclick=()=>{rows.push({mark:"",name:"",type:"Openable window",h:0,w:0,qty:1,src:"manual"});save();draw()};
+$("clr").onclick=()=>{if(confirm("Clear all rows?")){rows=[];save();draw()}};
+$("csv").onclick=()=>{
+  const q=v=>'"'+String(v).replace(/"/g,'""')+'"';
+  const t=["Mark,Description,Type,Height mm,Width mm,Qty,Source"].concat(rows.map(r=>[r.mark,r.name,r.type,r.h,r.w,r.qty,r.src].map(q).join(","))).join("\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type:"text/csv"}));a.download="opening-boq.csv";a.click();
+};
+draw();
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body></html>
