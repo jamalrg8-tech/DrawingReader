@@ -9,58 +9,75 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
---bg:#f3f5f2;--card:#fff;--ink:#17231f;--mut:#61706a;--line:#d5dcd8;--acc:#1f3a34;--hi:#c8641e}
-@media (prefers-color-scheme:dark){:root{--bg:#121a17;--card:#1b2622;--ink:#e8eeea;--mut:#9aa9a2;--line:#2f3d38;--acc:#7fc4ae;--hi:#f0985a}}
+--bg:#f3f5f2;--card:#fff;--ink:#17231f;--mut:#61706a;--line:#d5dcd8;--acc:#1f3a34;--hi:#c8641e;--flag:#fdf1e7}
+@media (prefers-color-scheme:dark){:root{--bg:#121a17;--card:#1b2622;--ink:#e8eeea;--mut:#9aa9a2;--line:#2f3d38;--acc:#7fc4ae;--hi:#f0985a;--flag:#33261b}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 "Arial Narrow",system-ui,sans-serif}
-header{padding:16px 16px 8px}
+header{padding:16px 16px 8px;max-width:1000px;margin:auto}
 h1{margin:0;font-size:26px;font-weight:600}
 p.s{margin:4px 0 0;color:var(--mut)}
-main{padding:8px 16px 40px;max-width:900px;margin:auto}
-.drops{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.drop{display:block;border:2px dashed var(--acc);border-radius:10px;padding:14px;text-align:center;background:var(--card);cursor:pointer;font-size:14px;color:var(--mut)}
-.drop b{color:var(--acc);font-size:16px}
+main{padding:8px 16px 40px;max-width:1000px;margin:auto}
+.drops{display:grid;grid-template-columns:2fr 1fr;gap:10px}
+@media (max-width:640px){.drops{grid-template-columns:1fr}}
+.drop{display:block;border:2px dashed var(--acc);border-radius:10px;padding:16px;text-align:center;background:var(--card);cursor:pointer;font-size:14px;color:var(--mut)}
+.drop b{color:var(--acc);font-size:17px}
+.drop.main{border-style:solid;background:var(--acc);color:#d6e3de}.drop.main b{color:#fff}
+@media (prefers-color-scheme:dark){.drop.main{color:#14231e}.drop.main b{color:#0d1512}}
 input[type=file]{display:none}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:center}
 button{font:inherit;padding:9px 14px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:#fff;cursor:pointer}
 @media (prefers-color-scheme:dark){button{color:#0d1512}}
 button.g{background:transparent;color:var(--acc)}
-#log{color:var(--mut);font-size:14px;margin:8px 0;min-height:20px}
+#log{color:var(--mut);font-size:14px;margin:10px 0;min-height:20px;white-space:pre-line}
+#bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;display:none;margin-top:10px}
+#bar i{display:block;height:100%;width:0;background:var(--hi);transition:width .3s}
+#proj{display:none;font-size:14px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0}
+#proj b{font-weight:600}
 .wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--card)}
-table{border-collapse:collapse;width:100%;min-width:700px}
+table{border-collapse:collapse;width:100%;min-width:760px}
 th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
 th{font-weight:600;color:var(--mut);font-size:14px}
+tr.fl td{background:var(--flag)}
+tr.fl td:first-child{box-shadow:inset 3px 0 var(--hi)}
 td input,td select{font:inherit;background:transparent;color:inherit;border:1px solid transparent;border-radius:6px;padding:4px;width:100%}
 td input:focus,td select:focus{border-color:var(--acc);outline:none}
-td input.n{width:64px}
+td input.n{width:68px}
+td.src{font-size:13px;color:var(--mut);max-width:180px;overflow:hidden;text-overflow:ellipsis}
 tfoot td{font-weight:600}
 h2{font-size:18px;margin:18px 0 6px}
+.key{font-size:13px;color:var(--mut);margin:6px 0}
+.key span{background:var(--flag);box-shadow:inset 3px 0 var(--hi);padding:1px 6px;border-radius:3px}
 </style></head>
 <body>
 <header><h1>Opening BOQ</h1><p class="s">Build a door and window order list from drawing PDFs.</p></header>
 <main>
 <div class="drops">
-<label class="drop"><input id="f1" type="file" accept="application/pdf" multiple><b>Read schedule</b><br>Instant, offline. For sheets with a schedule table.</label>
-<label class="drop"><input id="f2" type="file" accept="application/pdf" multiple><b>Read with AI</b><br>Any drawing, including elevations with dimensions only.</label>
+<label class="drop main"><input id="f2" type="file" accept="application/pdf" multiple><b>Read drawings</b><br>Choose the whole drawing set (plans and elevations, one or more PDFs). The AI reads every sheet and builds one list.</label>
+<label class="drop"><input id="f1" type="file" accept="application/pdf" multiple><b>Read schedule</b><br>Free and instant, for sheets with a typed schedule table.</label>
 </div>
+<div id="bar"><i></i></div>
 <div id="log"></div>
+<div class="row" id="stopRow" style="display:none"><button id="stop" class="g">Stop reading</button></div>
+<div id="proj"></div>
 <div class="row"><button id="add" class="g">Add row</button><button id="csv">Export CSV</button><button id="clr" class="g">Clear</button></div>
-<div class="wrap"><table><thead><tr><th>Mark</th><th>Description</th><th>Type</th><th>H (mm)</th><th>W (mm)</th><th>Qty</th><th>Source</th><th></th></tr></thead><tbody id="tb"></tbody><tfoot><tr><td colspan="5">Total openings</td><td id="tot">0</td><td colspan="2"></td></tr></tfoot></table></div>
+<div class="wrap"><table><thead><tr><th>Mark</th><th>Description</th><th>Type</th><th>H (mm)</th><th>W (mm)</th><th>Qty</th><th>Seen on</th><th></th></tr></thead><tbody id="tb"></tbody><tfoot><tr><td colspan="5">Total openings</td><td id="tot">0</td><td colspan="2"></td></tr></tfoot></table></div>
+<p class="key"><span>Highlighted rows</span> need a check: low confidence, sizes that differ between sheets, a missing size, or an opening outside the revision clouds (qty set to 0).</p>
 <h2>Summary by type</h2><div class="wrap"><table style="min-width:0"><tbody id="sum"></tbody></table></div>
-<p class="s">AI results are a first pass. Check every size against the drawing, and remember one opening can appear on both a plan and an elevation, so the same window may be listed twice.</p>
+<p class="s">AI results are a first pass. Check every size against the drawing before ordering.</p>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
 if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-const TYPES=["Fixed window","Openable window","Sliding door","Single hinged door","Double hinged door"];
+const TYPES=["Fixed window","Openable window","Sliding window","Sliding door","Single hinged door","Double hinged door","Other"];
 const $=id=>document.getElementById(id);
-let rows=[];try{rows=JSON.parse(localStorage.getItem("boq")||"[]")}catch(e){}
-const save=()=>{try{localStorage.setItem("boq",JSON.stringify(rows))}catch(e){}};
+let rows=[],proj=null;
+try{rows=JSON.parse(localStorage.getItem("boq")||"[]");proj=JSON.parse(localStorage.getItem("boqProj")||"null")}catch(e){}
+const save=()=>{try{localStorage.setItem("boq",JSON.stringify(rows));localStorage.setItem("boqProj",JSON.stringify(proj))}catch(e){}};
 const log=(m,c)=>{$("log").textContent=m;$("log").style.color=c||""};
 
 function classify(mark,name){
   const s=(name||"").toLowerCase();
-  if(/slid/.test(s))return "Sliding door";
+  if(/slid/.test(s))return /^d|door/i.test(mark+" "+s)?"Sliding door":"Sliding window";
   if(/double|mullionless/.test(s))return "Double hinged door";
   if(/tilt|turn|sash|casement|open/.test(s))return /^d/i.test(mark)?"Single hinged door":"Openable window";
   if(/fixed|frames/.test(s))return "Fixed window";
@@ -74,7 +91,7 @@ async function pageLines(page){
 }
 const openPdf=async f=>pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;
 
-/* ---- Mode 1: schedule table, runs in the browser ---- */
+/* ---- Read schedule: typed schedule table, runs in the browser, no AI ---- */
 async function readSchedule(file){
   const pdf=await openPdf(file),sched={},tags={},all={};let elev=0;
   for(let p=1;p<=pdf.numPages;p++){
@@ -91,7 +108,7 @@ $("f1").onchange=async e=>{
   for(const file of e.target.files){
     try{
       const r=await readSchedule(file),n=Object.keys(r.sched).length;
-      if(!n){msg.push(file.name+": no schedule table found. Try Read with AI.");continue}
+      if(!n){msg.push(file.name+": no typed schedule table found. Use Read drawings instead.");continue}
       Object.values(r.sched).forEach(s=>{if(rows.some(x=>x.mark===s.mark&&x.src===file.name.slice(0,14)))return;
         rows.push({mark:s.mark,name:s.name,type:classify(s.mark,s.name),h:s.h,w:s.w,qty:r.tags[s.mark.toUpperCase()]||0,src:file.name.slice(0,14)})});
       msg.push(file.name+": "+n+" marks read.");
@@ -100,69 +117,130 @@ $("f1").onchange=async e=>{
   save();draw();log(msg.join(" "));e.target.value="";
 };
 
-/* ---- Mode 2: AI reads each sheet through /api/extract ---- */
-async function render(page,maxPx=1568,q=.8){
-  const v0=page.getViewport({scale:1}),sc=Math.min(2.5,maxPx/Math.max(v0.width,v0.height)),v=page.getViewport({scale:sc});
-  const c=document.createElement("canvas");c.width=Math.round(v.width);c.height=Math.round(v.height);
+/* ---- Read drawings: AI reads every sheet, then the set is merged ---- */
+const MAX_PAGES=40,BODY_LIMIT=3.6e6;
+const jpg=(c,q)=>c.toDataURL("image/jpeg",q).split(",")[1];
+// One overview of the sheet plus four zoomed, overlapping quarters, so small dimension numbers stay readable.
+async function sheetImages(page){
+  const v1=page.getViewport({scale:1}),tile=.56,sc=Math.min(4,1568/(Math.max(v1.width,v1.height)*tile));
+  const v=page.getViewport({scale:sc}),c=document.createElement("canvas");c.width=Math.floor(v.width);c.height=Math.floor(v.height);
   const ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);
   await page.render({canvasContext:ctx,viewport:v}).promise;
-  let d=c.toDataURL("image/jpeg",q).split(",")[1];
-  // Vercel rejects request bodies over 4.5 MB; shrink busy sheets until they fit.
-  if(d.length>3200000&&maxPx>900)return render(page,Math.round(maxPx*.8),.7);
-  return d;
+  const crop=(x,y,w,h,max)=>{const k=Math.min(1,max/Math.max(w,h)),o=document.createElement("canvas");o.width=Math.round(w*k);o.height=Math.round(h*k);
+    const g=o.getContext("2d");g.imageSmoothingQuality="high";g.drawImage(c,x,y,w,h,0,0,o.width,o.height);return o};
+  const W=c.width,H=c.height,tw=Math.round(W*tile),th=Math.round(H*tile);
+  const parts=[crop(0,0,W,H,1568),crop(0,0,tw,th,1568),crop(W-tw,0,tw,th,1568),crop(0,H-th,tw,th,1568),crop(W-tw,H-th,tw,th,1568)];
+  for(const q of [.82,.7,.58,.48]){const imgs=parts.map(p=>jpg(p,q));if(imgs.reduce((a,s)=>a+s.length,0)<BODY_LIMIT)return imgs}
+  return parts.map(p=>jpg(p,.4));
 }
-async function callApi(body){
+async function callApi(body,signal){
   for(let tries=0;tries<3;tries++){
     let r;
-    try{r=await fetch("/api/extract",{method:"POST",headers:{"content-type":"application/json","x-app-password":localStorage.getItem("pw")||""},body:JSON.stringify(body)})}
-    catch(e){throw new Error("Could not reach /api/extract. Make sure the test server is running (Start app.command) or use your Vercel address.")}
+    try{r=await fetch("/api/extract",{method:"POST",signal,headers:{"content-type":"application/json","x-app-password":localStorage.getItem("pw")||""},body:JSON.stringify(body)})}
+    catch(e){if(e.name==="AbortError")throw e;throw new Error("Could not reach the app's server. Read drawings only works from your Vercel address, not from a file opened on your computer.")}
     if(r.status===401){localStorage.removeItem("pw");const p=prompt("Password for this app:");if(!p)throw new Error("Password required");localStorage.setItem("pw",p);continue}
     const raw=await r.text();let j=null;try{j=JSON.parse(raw)}catch(e){}
     if(r.ok&&j)return j;
     if(j&&j.error)throw new Error(j.error);
-    const hint={404:"the api folder was not deployed (check api/extract.js is in the repo)",405:"the site host is not running the api function (deploy on Vercel)",413:"page image too large",504:"timed out on Vercel (sheet took too long to read)"}[r.status];
+    const hint={404:"the api folder was not uploaded (api/extract.js must be in the repo)",405:"the host is not running the api function (deploy on Vercel)",413:"sheet image too large",504:"timed out on Vercel"}[r.status];
     throw new Error("Error "+r.status+(hint?": "+hint:"")+(raw&&!hint?": "+raw.slice(0,120):""));
   }
   throw new Error("Wrong password");
 }
-$("f2").onchange=async e=>{
-  let added=0;const errs=[];
-  if(location.protocol==="file:"){log("Read with AI cannot run from a double-clicked index.html. Double-click Start app.command in the app folder instead (it opens localhost:3000), or use your Vercel address.","var(--hi)");e.target.value="";return}
-  for(const file of e.target.files){
-    try{
-      const pdf=await openPdf(file),n=Math.min(pdf.numPages,20);
-      for(let p=1;p<=n;p++){
-        log(`${file.name}: reading page ${p} of ${n}…`);
-        const page=await pdf.getPage(p),{flat}=await pageLines(page);
-        try{
-          const j=await callApi({image:await render(page),text:flat.slice(0,5000)});
-          (j.openings||[]).forEach(o=>{
-            rows.push({mark:o.mark||"",name:(o.description||"")+(o.note?" ("+o.note+")":""),type:TYPES.includes(o.type)?o.type:"Openable window",
-              h:+o.height_mm||0,w:+o.width_mm||0,qty:+o.qty||1,src:(o.view||"p"+p).slice(0,22)});added++});
-          save();draw();
-        }catch(err){errs.push("p"+p+": "+err.message)}
-      }
-    }catch(err){errs.push(file.name+": "+err.message)}
+
+const normMark=m=>String(m||"").toUpperCase().replace(/^ITEM\s*/,"").replace(/[\s_]/g,"").replace(/^0+(?=\d)/,"");
+const mode=a=>{const c={};let b=null,n=0;a.forEach(x=>{const k=JSON.stringify(x);c[k]=(c[k]||0)+1;if(c[k]>n){n=c[k];b=x}});return b};
+const short=v=>String(v||"").replace(/\belevation\b/i,"elev.").replace(/\bfloor plan\b/i,"plan").trim();
+// Merge the sheets of one set: each tagged opening once, sizes from schedule > elevation > plan,
+// quantity from the schedule or from how many times it is drawn on the elevations.
+function mergeSet(sheets){
+  const all=[];sheets.forEach(s=>(s.openings||[]).forEach(o=>all.push({...o,st:s.sheet_type||"other",view:o.view||s.view||("p"+s.p),clouds:!!s.has_revision_clouds})));
+  const hasElev=all.some(o=>o.st==="elevation"),clouds=all.some(o=>o.in_cloud===true);
+  const out=[],groups={};let droppedPlan=0;
+  all.forEach(o=>{const k=normMark(o.mark);if(k)(groups[k]=groups[k]||[]).push(o);else if(o.st==="plan"&&hasElev)droppedPlan++;else(groups["~"+out.length+Math.random()]=[o])});
+  for(const k in groups){
+    const g=groups[k],sched=g.filter(o=>o.st==="schedule"),elev=g.filter(o=>o.st==="elevation");
+    const src=sched.length?sched:elev.length?elev:g;
+    const sized=src.filter(o=>o.width_mm&&o.height_mm),sizes=[...new Set(sized.map(o=>o.width_mm+"×"+o.height_mm))];
+    const best=mode(sized.map(o=>[+o.width_mm,+o.height_mm]))||[+(src.find(o=>o.width_mm)||{}).width_mm||0,+(src.find(o=>o.height_mm)||{}).height_mm||0];
+    let qty=src.reduce((a,o)=>a+(+o.qty||1),0);
+    const notes=[],flags=[];
+    if(sizes.length>1){flags.push("sizes differ");notes.push("sizes differ between sheets: "+sizes.join(", "))}
+    if(!best[0]||!best[1]){flags.push("missing size");notes.push("size not found")}
+    if(src.some(o=>o.confidence==="low")){flags.push("low confidence")}
+    if(clouds&&!g.some(o=>o.in_cloud===true)){flags.push("outside clouds");notes.push("outside revision clouds, qty set to 0");qty=0}
+    if(!elev.length&&!sched.length&&hasElev&&k[0]!=="~"){flags.push("plan only");notes.push("only found on a plan")}
+    g.forEach(o=>{if(o.note&&!notes.includes(o.note))notes.push(o.note)});
+    const desc=mode(src.map(o=>o.description||"").filter(Boolean))||"";
+    const type=mode(src.map(o=>TYPES.includes(o.type)?o.type:"Other"))||"Other";
+    out.push({mark:k[0]==="~"?"":(g[0].mark||"").replace(/^ITEM\s*/i,""),name:desc+(notes.length?" ("+notes.join("; ")+")":""),type,w:best[0]||0,h:best[1]||0,qty,
+      src:[...new Set(g.map(o=>short(o.view)))].join(", "),flag:flags.join(", ")});
   }
-  log(added+" openings added."+(errs.length?" Problems: "+errs.join("; "):" Check them against the drawing."),errs.length?"var(--hi)":"");
-  e.target.value="";
+  // identical untagged openings become one row
+  const merged=[];out.forEach(r=>{const m=!r.mark&&!r.flag&&merged.find(x=>!x.mark&&!x.flag&&x.type===r.type&&x.w===r.w&&x.h===r.h&&x.name===r.name);
+    if(m){m.qty+=r.qty;if(!m.src.includes(r.src))m.src+=", "+r.src}else merged.push(r)});
+  merged.sort((a,b)=>(a.mark?0:1)-(b.mark?0:1)||String(a.mark).localeCompare(String(b.mark),undefined,{numeric:true}));
+  return{rows:merged,droppedPlan};
+}
+
+let busy=null;
+$("stop").onclick=()=>busy&&busy.abort();
+$("f2").onchange=async e=>{
+  const files=[...e.target.files];e.target.value="";if(!files.length||busy)return;
+  if(location.protocol==="file:")return log("Read drawings needs the app opened from its Vercel address, not from a file on your computer.","var(--hi)");
+  if(!window.pdfjsLib)return log("The PDF reader did not load. Check your internet connection and reload the page.","var(--hi)");
+  busy=new AbortController();$("stopRow").style.display="";$("bar").style.display="block";
+  const jobs=[],errs=[],sheets=[];
+  try{
+    for(const f of files){const pdf=await openPdf(f);for(let p=1;p<=pdf.numPages&&jobs.length<MAX_PAGES;p++)jobs.push({f,pdf,p,n:pdf.numPages})}
+    if(jobs.length>=MAX_PAGES)errs.push("only the first "+MAX_PAGES+" sheets were read");
+    let done=0,next=0;
+    const progress=()=>{$("bar").firstChild.style.width=(100*done/jobs.length)+"%";log(`Reading sheet ${Math.min(done+1,jobs.length)} of ${jobs.length}… (about 20–60 seconds per sheet)`)};
+    progress();
+    const worker=async()=>{while(next<jobs.length&&!busy.signal.aborted){const jb=jobs[next++];
+      try{
+        const page=await jb.pdf.getPage(jb.p),{flat}=await pageLines(page);
+        const images=await sheetImages(page);
+        const s=await callApi({images,text:flat.slice(0,6000),label:`File "${jb.f.name}", sheet ${jb.p} of ${jb.n}.`},busy.signal);
+        s.p=jb.p;s.file=jb.f.name;sheets.push(s);
+        if(s.project&&(s.project.name||s.project.frame_colour||s.project.glass))proj={...(proj||{}),...Object.fromEntries(Object.entries(s.project).filter(([k,v])=>v))};
+      }catch(err){if(err.name!=="AbortError")errs.push(jb.f.name.slice(0,20)+" p"+jb.p+": "+err.message)}
+      done++;progress()}};
+    await Promise.all([worker(),worker()]);
+    const stopped=busy.signal.aborted;
+    const {rows:newRows,droppedPlan}=mergeSet(sheets);
+    rows.push(...newRows);save();draw();
+    const nOpen=newRows.reduce((a,r)=>a+(+r.qty||0),0),nFlag=newRows.filter(r=>r.flag).length;
+    log((stopped?"Stopped. ":"")+`${sheets.length} sheet${sheets.length===1?"":"s"} read: ${newRows.length} rows, ${nOpen} openings.`+
+      (nFlag?` ${nFlag} highlighted row${nFlag===1?"":"s"} to check.`:"")+
+      (droppedPlan?` ${droppedPlan} untagged opening${droppedPlan===1?"":"s"} seen only on plans were left out (elevations used instead).`:"")+
+      (errs.length?"\nProblems: "+errs.join("; "):""),errs.length?"var(--hi)":"");
+  }catch(err){log(err.message,"var(--hi)")}
+  busy=null;$("stopRow").style.display="none";$("bar").style.display="none";
 };
 
+function drawProj(){
+  const p=proj||{},bits=[["Project",p.name],["Frame colour",p.frame_colour],["Glass",p.glass]].filter(x=>x[1]);
+  $("proj").style.display=bits.length?"block":"none";
+  $("proj").innerHTML=bits.map(([k,v])=>`<b>${k}:</b> ${String(v).replace(/</g,"&lt;")}`).join(" &nbsp;·&nbsp; ");
+}
 function draw(){
-  const q=s=>String(s||"").replace(/"/g,"&quot;");
-  $("tb").innerHTML=rows.map((r,i)=>`<tr><td><input value="${q(r.mark)}" data-i="${i}" data-k="mark" style="width:70px"></td><td><input value="${q(r.name)}" data-i="${i}" data-k="name" style="min-width:170px"></td><td><select data-i="${i}" data-k="type">${TYPES.map(t=>`<option${t===r.type?" selected":""}>${t}</option>`).join("")}</select></td><td><input class="n" type="number" value="${r.h}" data-i="${i}" data-k="h"></td><td><input class="n" type="number" value="${r.w}" data-i="${i}" data-k="w"></td><td><input class="n" type="number" value="${r.qty}" data-i="${i}" data-k="qty"></td><td>${q(r.src)}</td><td><button class="g" data-del="${i}">✕</button></td></tr>`).join("")||`<tr><td colspan="8">No rows yet. Choose a PDF or add a row.</td></tr>`;
+  const q=s=>String(s??"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+  $("tb").innerHTML=rows.map((r,i)=>`<tr${r.flag?` class="fl" title="Check: ${q(r.flag)}"`:""}><td><input value="${q(r.mark)}" data-i="${i}" data-k="mark" style="width:70px"></td><td><input value="${q(r.name)}" data-i="${i}" data-k="name" style="min-width:220px"></td><td><select data-i="${i}" data-k="type">${TYPES.map(t=>`<option${t===r.type?" selected":""}>${t}</option>`).join("")}</select></td><td><input class="n" type="number" value="${r.h}" data-i="${i}" data-k="h"></td><td><input class="n" type="number" value="${r.w}" data-i="${i}" data-k="w"></td><td><input class="n" type="number" value="${r.qty}" data-i="${i}" data-k="qty"></td><td class="src" title="${q(r.src)}">${q(r.src)}</td><td><button class="g" data-del="${i}" title="Delete row">✕</button></td></tr>`).join("")||`<tr><td colspan="8">No rows yet. Choose your drawing PDFs above, or add a row.</td></tr>`;
   $("tot").textContent=rows.reduce((a,r)=>a+(+r.qty||0),0);
   const s={};rows.forEach(r=>s[r.type]=(s[r.type]||0)+(+r.qty||0));
-  $("sum").innerHTML=TYPES.map(t=>`<tr><td>${t}</td><td>${s[t]||0}</td></tr>`).join("");
+  $("sum").innerHTML=TYPES.filter(t=>s[t]||TYPES.indexOf(t)<6).map(t=>`<tr><td>${t}</td><td>${s[t]||0}</td></tr>`).join("");
+  drawProj();
 }
 $("tb").addEventListener("change",e=>{const i=e.target.dataset.i;if(i==null)return;const k=e.target.dataset.k;rows[i][k]=["h","w","qty"].includes(k)?+e.target.value:e.target.value;save();draw()});
 $("tb").addEventListener("click",e=>{const d=e.target.dataset.del;if(d!=null){rows.splice(d,1);save();draw()}});
 $("add").onclick=()=>{rows.push({mark:"",name:"",type:"Openable window",h:0,w:0,qty:1,src:"manual"});save();draw()};
-$("clr").onclick=()=>{if(confirm("Clear all rows?")){rows=[];save();draw()}};
+$("clr").onclick=()=>{if(confirm("Clear all rows?")){rows=[];proj=null;save();draw()}};
 $("csv").onclick=()=>{
-  const q=v=>'"'+String(v).replace(/"/g,'""')+'"';
-  const t=["Mark,Description,Type,Height mm,Width mm,Qty,Source"].concat(rows.map(r=>[r.mark,r.name,r.type,r.h,r.w,r.qty,r.src].map(q).join(","))).join("\n");
-  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type:"text/csv"}));a.download="opening-boq.csv";a.click();
+  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"',p=proj||{};
+  const head=[["Project",p.name],["Frame colour",p.frame_colour],["Glass",p.glass]].filter(x=>x[1]).map(x=>x.map(q).join(","));
+  const t=head.concat(head.length?[""]:[],["Mark,Description,Type,Height mm,Width mm,Qty,Seen on,Check"],rows.map(r=>[r.mark,r.name,r.type,r.h,r.w,r.qty,r.src,r.flag||""].map(q).join(","))).join("\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+t],{type:"text/csv"}));a.download="opening-boq.csv";a.click();
 };
 draw();
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
